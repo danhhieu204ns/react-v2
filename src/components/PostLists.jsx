@@ -1,240 +1,252 @@
-import { useEffect, useState, useCallback } from "react";
-import { Link } from "react-router-dom";
-import axios from "axios";
+import React, { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { List, Card, Space, Tag, Button, Typography, Input, Select, Spin, Pagination } from "antd";
+import { 
+  EyeOutlined, 
+  LikeOutlined, 
+  MessageOutlined, 
+  EditOutlined, 
+  DeleteOutlined,
+  PlusOutlined,
+  SearchOutlined,
+} from "@ant-design/icons";
+import { postsAPI } from "../services/api";
+import { useAuth } from "../contexts/AuthContext";
+import { toast } from "react-toastify";
 import "./PostLists.css";
 
+const { Title, Text, Paragraph } = Typography;
+const { Search } = Input;
+const { Option } = Select;
+
 function PostLists() {
-  const [blogPosts, setBlogPosts] = useState([]);
-  const [inputNum, setInputNum] = useState('');
-  const [num, setNum] = useState(0);
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filters, setFilters] = useState({
+    tag: "",
+    status: "published"
+  });
+  const [sort, setSort] = useState("-createdAt");
+  const [pagination, setPagination] = useState({
+    current: 1,
+    pageSize: 6,
+    total: 0
+  });
 
-  const [newPostTitle, setNewPostTitle] = useState('');
-  const [newPostContent, setNewPostContent] = useState('');
-  const [newPostSlug, setNewPostSlug] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState(null);
-  const [submitSuccess, setSubmitSuccess] = useState('');
-
-  const handleNumChange = (e) => {
-    setInputNum(e.target.value);
-  };
-
-  const handleNumSubmit = () => {
-    if (!inputNum || inputNum.trim() === '') {
-      setNum(0);
-    } else {
-      const parsedNum = parseInt(inputNum, 10);
-      if (!isNaN(parsedNum) && parsedNum >= 0) {
-        setNum(parsedNum);
-      } else {
-        setNum(0);
-      }
-    }
-  };
-
-  const fetchBlogs = useCallback(async () => {
+  useEffect(() => {
+    fetchPosts();
+  }, [pagination.current, searchQuery, filters, sort]);
+  const fetchPosts = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const url = num > 0 ? `http://localhost:8080/api/blogs?limit=${num}` : `http://localhost:8080/api/blogs`;
-      const response = await axios.get(url);
-      // Check if response.data is an array directly or if posts are nested in a property
-      if (Array.isArray(response.data)) {
-        setBlogPosts(response.data);
-      } else if (response.data && Array.isArray(response.data.posts)) {
-        // If the API returns {posts: [...]} structure
-        setBlogPosts(response.data.posts);
-      } else if (response.data && Array.isArray(response.data.data)) {
-        // If the API returns {data: [...]} structure
-        setBlogPosts(response.data.data);
-      } else {
-        // If we can't find an array, set to empty array as fallback
-        console.error("Unexpected API response format:", response.data);
-        setBlogPosts([]);
+      const queryParams = {
+        page: pagination.current,
+        limit: pagination.pageSize,
+        sort: sort,
+      };
+      
+      if (searchQuery) {
+        queryParams.search = searchQuery;
       }
-      setError(false);
-    } catch (err) {
-      console.error("Failed to fetch blogs:", err);
-      setBlogPosts([]);
-      setError(true);
+      
+      if (filters.tag) {
+        queryParams.tag = filters.tag;
+      }
+      
+      if (filters.status) {
+        queryParams.status = filters.status;
+      }
+      
+      const response = await postsAPI.getAll(queryParams);
+      const { data, totalRecords } = response.data;
+      
+      setPosts(data);
+      setPagination(prev => ({
+        ...prev,
+        total: totalRecords
+      }));
+    } catch (error) {
+      // Thêm điều kiện để tránh hiển thị thông báo lỗi nhiều lần
+      if (!error.handled) {
+        error.handled = true;
+        toast.error("Failed to fetch posts");
+      }
     } finally {
       setLoading(false);
     }
-  }, [num]);
+  };
 
-  useEffect(() => {
-    fetchBlogs();
-  }, [fetchBlogs]);
+  const handleSearch = (value) => {
+    setSearchQuery(value);
+    setPagination(prev => ({ ...prev, current: 1 }));
+  };
 
-  const handleAddPostSubmit = async (e) => {
-    e.preventDefault();
-    setSubmitError(null);
-    setSubmitSuccess('');
-    setIsSubmitting(true);
+  const handleFilterChange = (key, value) => {
+    setFilters(prev => ({ ...prev, [key]: value }));
+    setPagination(prev => ({ ...prev, current: 1 }));
+  };
 
-    // Get token
-    const authToken = localStorage.getItem('authToken');
-    
-    if (!authToken) {
-      setSubmitError("Bạn cần đăng nhập để thêm bài đăng mới.");
-      setIsSubmitting(false);
-      return;
-    }
+  const handleSortChange = (value) => {
+    setSort(value);
+    setPagination(prev => ({ ...prev, current: 1 }));
+  };
 
-    if (!newPostTitle.trim() || !newPostContent.trim()) {
-      setSubmitError("Tiêu đề và nội dung không được để trống.");
-      setIsSubmitting(false);
-      return;
-    }
+  const handlePageChange = (page) => {
+    setPagination(prev => ({ ...prev, current: page }));
+  };
 
-    const postData = {
-      title: newPostTitle,
-      content: newPostContent,
-      slug: newPostSlug.trim() || undefined,
-    };
-
+  const handleDeletePost = async (id) => {
     try {
-      const response = await axios.post('http://localhost:8080/api/blogs', postData, {
-        headers: {
-          'Authorization': `Bearer ${authToken}`
-        }
-      });
-      setSubmitSuccess(`Bài đăng "${response.data.title}" đã được thêm thành công!`);
-      setNewPostTitle('');
-      setNewPostContent('');
-      setNewPostSlug('');
-      fetchBlogs();
-    } catch (err) {
-      console.error("Failed to add post:", err);
-      if (err.response?.status === 401) {
-        setSubmitError("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
-      } else {
-        setSubmitError(err.response?.data?.error || "Thêm bài đăng thất bại. Vui lòng thử lại.");
-      }
-    } finally {
-      setIsSubmitting(false);
+      await postsAPI.delete(id);
+      toast.success("Post deleted successfully");
+      fetchPosts();
+    } catch (error) {
+      toast.error("Failed to delete post");
     }
   };
 
+  if (loading && posts.length === 0) {
+    return (
+      <div style={{ textAlign: "center", padding: "50px" }}>
+        <Spin size="large" />
+      </div>
+    );
+  }
+
   return (
-    <div className="post-list-container">
-      <div className="card mb-3">
-        <div className="card-header">
-          <h2>Thêm bài đăng mới</h2>
-        </div>
-        <div className="card-body">
-          <form onSubmit={handleAddPostSubmit}>
-            <div className="form-group">
-              <label className="form-label" htmlFor="post-title">Tiêu đề:</label>
-              <input
-                className="form-control"
-                id="post-title"
-                type="text"
-                value={newPostTitle}
-                onChange={(e) => setNewPostTitle(e.target.value)}
-                required
-              />
-            </div>
-            
-            <div className="form-group">
-              <label className="form-label" htmlFor="post-slug">Slug (tùy chọn):</label>
-              <input
-                className="form-control"
-                id="post-slug"
-                type="text"
-                value={newPostSlug}
-                onChange={(e) => setNewPostSlug(e.target.value)}
-                placeholder="vi-du-slug-bai-dang"
-              />
-            </div>
-            
-            <div className="form-group">
-              <label className="form-label" htmlFor="post-content">Nội dung:</label>
-              <textarea
-                className="form-control"
-                id="post-content"
-                value={newPostContent}
-                onChange={(e) => setNewPostContent(e.target.value)}
-                required
-                rows="5"
-              />
-            </div>
-            
-            <button className="btn btn-primary" type="submit" disabled={isSubmitting}>
-              {isSubmitting ? 'Đang thêm...' : 'Thêm bài đăng'}
-            </button>
-            
-            {submitError && <p className="post-list-error mt-3">{submitError}</p>}
-            {submitSuccess && <p className="mt-3" style={{ color: 'green' }}>{submitSuccess}</p>}
-          </form>
-        </div>
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <Title level={4}>All Posts</Title>
+        {user && (
+          <Button 
+            type="primary" 
+            icon={<PlusOutlined />}
+            onClick={() => navigate("/create-post")}
+          >
+            New Post
+          </Button>
+        )}
       </div>
-
-      {/* Phần lọc bài đăng */}
-      <div className="card mb-3">
-        <div className="card-body">
-          <div className="form-group">
-            <label className="form-label" htmlFor="post-number">Giới hạn số lượng bài đăng:</label>
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <input
-                className="form-control"
-                id="post-number"
-                type="number"
-                value={inputNum}
-                onChange={handleNumChange}
-                placeholder="Để trống hoặc 0 để lấy tất cả"
-                min="0"
-              />
-              <button className="btn btn-primary" onClick={handleNumSubmit}>Áp dụng</button>
-            </div>
-          </div>
-        </div>
+      
+      <div style={{ marginBottom: 24 }}>
+        <Space wrap>
+          <Search
+            placeholder="Search posts..."
+            allowClear
+            enterButton={<SearchOutlined />}
+            onSearch={handleSearch}
+            style={{ width: 250 }}
+          />
+          
+          <Select 
+            placeholder="Filter by Status"
+            style={{ width: 150 }}
+            onChange={(value) => handleFilterChange("status", value)}
+            value={filters.status}
+          >
+            <Option value="published">Published</Option>
+            <Option value="draft">Draft</Option>
+            {user && user.role === "admin" && <Option value="all">All</Option>}
+          </Select>
+          
+          <Select
+            placeholder="Sort By"
+            style={{ width: 150 }}
+            onChange={handleSortChange}
+            value={sort}
+          >
+            <Option value="-createdAt">Newest First</Option>
+            <Option value="createdAt">Oldest First</Option>
+            <Option value="-likesCount">Most Liked</Option>
+            <Option value="-commentCount">Most Commented</Option>
+          </Select>
+        </Space>
       </div>
-
-      {/* Danh sách bài đăng */}
-      <h2 className="post-list-title">Danh sách bài đăng</h2>
       
-      {loading && (
-        <div className="post-list-loading">Đang tải bài viết...</div>
-      )}
-      
-      {error && (
-        <div className="post-list-error">Đã xảy ra lỗi khi tải bài viết. Vui lòng thử lại sau.</div>
-      )}
-      
-      {!loading && !error && blogPosts.length === 0 && (
-        <div className="text-center">Không có bài viết nào để hiển thị.</div>
-      )}
-      
-      {!loading && !error && blogPosts.length > 0 && (
-        <div className="post-list">
-          {blogPosts.map((post) => {
-            // Safely destructure blog post data with fallbacks
-            const { id = 'unknown', slug = 'post', title = 'Untitled Post', content = '' } = post || {};
-            return (
-              <div key={id} className="post-item">
-                <div className="post-item-image">
-                  {/* Hình ảnh bài viết (có thể thay thế bằng hình ảnh thực tế) */}
-                  <div style={{ width: '100%', height: '100%', backgroundColor: '#e0e7ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <span style={{ color: '#3b82f6', fontSize: '3rem' }}>📝</span>
+      <List
+        grid={{ gutter: 16, xs: 1, sm: 1, md: 2, lg: 3, xl: 3, xxl: 4 }}
+        dataSource={posts}
+        locale={{ emptyText: "No posts found" }}
+        renderItem={(post) => (
+          <List.Item>
+            <Card
+              hoverable
+              className="post-card"
+              actions={[
+                <Link to={`/posts/${post._id}`}><EyeOutlined key="view" /> View</Link>,
+                <span><LikeOutlined key="like" /> {post.likes?.length || 0}</span>,
+                <span><MessageOutlined key="message" /> {post.commentCount || 0}</span>,
+              ]}
+              extra={
+                user && (user._id === post.author?._id || user.role === "admin") && (
+                  <Space>
+                    <Button 
+                      icon={<EditOutlined />} 
+                      size="small"
+                      onClick={() => navigate(`/edit-post/${post._id}`)}
+                    />
+                    <Button 
+                      danger 
+                      icon={<DeleteOutlined />} 
+                      size="small"
+                      onClick={() => handleDeletePost(post._id)}
+                    />
+                  </Space>
+                )
+              }
+            >
+              <Card.Meta
+                title={
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <Link to={`/posts/${post._id}`}>{post.title}</Link>
+                    {post.status === "draft" && <Tag color="orange">Draft</Tag>}
                   </div>
-                </div>
-                <div className="post-item-content">
-                  <h3 className="post-item-title">{title}</h3>
-                  <p className="post-item-excerpt">
-                    {content && content.length > 150 ? content.substring(0, 150) + '...' : content}
-                  </p>
-                  <div className="post-item-meta">
-                    <span>ID: {id}</span>
-                    <Link to={`/posts/${slug}`} className="post-item-button">Xem chi tiết</Link>
+                }
+                description={
+                  <div>
+                    <div className="post-info">
+                      <Text type="secondary">
+                        {new Date(post.createdAt).toLocaleDateString()}
+                      </Text>
+                      <Text type="secondary">
+                        By: {post.author?.username || "Unknown"}
+                      </Text>
+                    </div>
+                    <Paragraph ellipsis={{ rows: 3 }} className="post-excerpt">
+                      {post.content}
+                    </Paragraph>
+                    <div className="post-tags">
+                      {post.tags && post.tags.map(tag => (
+                        <Tag 
+                          color="blue" 
+                          key={tag}
+                          onClick={() => handleFilterChange("tag", tag)}
+                          style={{ cursor: "pointer" }}
+                        >
+                          {tag}
+                        </Tag>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+                }
+              />
+            </Card>
+          </List.Item>
+        )}
+      />
+      
+      <div style={{ textAlign: "center", marginTop: 24 }}>
+        <Pagination
+          current={pagination.current}
+          pageSize={pagination.pageSize}
+          total={pagination.total}
+          onChange={handlePageChange}
+          showSizeChanger={false}
+        />
+      </div>
     </div>
   );
 }

@@ -7,7 +7,6 @@ const rootElement = document.getElementById("root");
 const root = createRoot(rootElement);
 
 root.render(
-  <StrictMode>
-    <App />
-  </StrictMode>
+  // StrictMode được tắt để tránh hiển thị thông báo lỗi 2 lần
+  <App />
 );

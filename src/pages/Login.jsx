@@ -1,71 +1,78 @@
-import { useNavigate } from "react-router-dom";
-import { useState } from "react";
-import axios from "axios";
+import React from "react";
+import { useNavigate, Link } from "react-router-dom";
+import { Form, Input, Button, Card, Typography, Divider } from "antd";
+import { UserOutlined, LockOutlined } from "@ant-design/icons";
+import { useAuth } from "../contexts/AuthContext";
 
-function Login({ onLogin }) {
-  const [creds, setCreds] = useState({});
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+const { Title, Text } = Typography;
+
+function Login() {
+  const { login, loading } = useAuth();
   const navigate = useNavigate();
+  const [form] = Form.useForm();
 
-  async function handleLogin() {
-    setError("");
-    setLoading(true);
-    
-    if (!creds.username || !creds.password) {
-      setError("Username and password are required");
-      setLoading(false);
-      return;
+  const onFinish = async (values) => {
+    const success = await login(values);
+    if (success) {
+      form.resetFields();
     }
-    
-    try {
-      const response = await axios.post('http://localhost:8080/api/login', {
-        username: creds.username,
-        password: creds.password
-      });
-      
-      const data = response.data;
-      // console.log(response);
-      
-      if (response.status !== 200) {
-        throw new Error(data.error || 'Login failed');
-      }
-      
-      localStorage.setItem('authToken', data.token);
-      localStorage.setItem('user', JSON.stringify(data.user));
-      
-      onLogin && onLogin(data.user);
-      
-      navigate("/stats");
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }
+  };
 
   return (
-    <div style={{ padding: 10 }}>
-      <br />
-      {error && <div style={{ color: 'red', marginBottom: 10 }}>{error}</div>}
-      <span>Username:</span>
-      <br />
-      <input
-        type="text"
-        onChange={(e) => setCreds({ ...creds, username: e.target.value })}
-      />
-      <br />
-      <span>Password:</span>
-      <br />
-      <input
-        type="password"
-        onChange={(e) => setCreds({ ...creds, password: e.target.value })}
-      />
-      <br />
-      <br />
-      <button onClick={handleLogin} disabled={loading}>
-        {loading ? "Logging in..." : "Login"}
-      </button>
+    <div style={{ display: "flex", justifyContent: "center", paddingTop: "50px" }}>
+      <Card style={{ width: 400, boxShadow: "0 4px 8px rgba(0,0,0,0.1)" }}>
+        <Title level={2} style={{ textAlign: "center" }}>Login</Title>
+        <Divider />
+        
+        <Form
+          name="login"
+          form={form}
+          initialValues={{ remember: true }}
+          onFinish={onFinish}
+          layout="vertical"
+        >
+          <Form.Item
+            name="username"
+            label="Username"
+            rules={[{ required: true, message: "Please input your username!" }]}
+          >
+            <Input 
+              prefix={<UserOutlined />} 
+              placeholder="Username" 
+              size="large"
+            />
+          </Form.Item>
+
+          <Form.Item
+            name="password"
+            label="Password"
+            rules={[{ required: true, message: "Please input your password!" }]}
+          >
+            <Input.Password
+              prefix={<LockOutlined />}
+              placeholder="Password"
+              size="large"
+            />
+          </Form.Item>
+
+          <Form.Item>
+            <Button 
+              type="primary" 
+              htmlType="submit" 
+              loading={loading}
+              style={{ width: "100%" }}
+              size="large"
+            >
+              Log in
+            </Button>
+          </Form.Item>
+        </Form>
+        
+        <div style={{ textAlign: "center" }}>
+          <Text>Don't have an account? </Text>
+          <Link to="/register">Register now!</Link>
+        </div>
+      </Card>
     </div>
   );
 }

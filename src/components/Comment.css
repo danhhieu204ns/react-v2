@@ -1,0 +1,29 @@
+/* Comment component styling */
+.comment-item {
+  padding: 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  background-color: #f9f9f9;
+}
+
+.comment-item .ant-list-item-meta {
+  align-items: flex-start;
+}
+
+.comment-item .ant-list-item-meta-avatar {
+  margin-top: 4px;
+}
+
+.comment-item .ant-list-item-action {
+  margin-top: 16px;
+}
+
+.comment-replies {
+  border-left: 2px solid #e8e8e8;
+  padding-left: 16px;
+  margin-top: 16px;
+}
+
+.comment-item:hover {
+  background-color: #f0f0f0;
+}
